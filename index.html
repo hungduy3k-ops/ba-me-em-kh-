@@ -1,0 +1,471 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Hành Trình Rước Kim Phượng 💗</title>
+<style>
+:root{--bg1:#ffe4ef;--bg2:#e6e4ff;--card:#fff8fc;--ink:#813c69;--pink:#f27caf;--pink2:#dc5894;--ov:#32162fe6;--paper:#fff8ed;--paperink:#914d70;box-sizing:border-box;padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}
+@media (prefers-color-scheme:dark){:root:not([data-theme="light"]){--bg1:#2a1426;--bg2:#1d1a3a;--card:#3a2037;--ink:#ffd3e8;--paper:#4a2a45;--paperink:#ffe4f1}}
+*{box-sizing:border-box}
+html,body{height:100%}
+body{margin:0;background:linear-gradient(135deg,var(--bg1),var(--bg2));font-family:Arial,sans-serif;color:var(--ink);text-align:center;touch-action:manipulation}
+h1{margin:14px 8px 4px;font-size:clamp(20px,4vw,32px)}
+.game{position:relative;width:min(960px,96vw);margin:8px auto;background:var(--card);border:4px solid #fff;border-radius:22px;overflow:hidden;box-shadow:0 10px 35px #b66b9633}
+.game.fs{position:fixed;inset:0;width:100%;margin:0;border:0;border-radius:0;z-index:50;display:flex;flex-direction:column;justify-content:center;padding-top:env(safe-area-inset-top,0px)}
+canvas{display:block;width:100%;height:auto;max-height:100vh;touch-action:none;background:#d9f5d4}
+.fs canvas{max-height:calc(100vh - 150px);object-fit:contain}
+.info{display:flex;justify-content:space-around;flex-wrap:wrap;gap:8px;padding:8px;font-weight:bold}
+button{border:0;background:var(--pink);color:#fff;padding:12px 18px;margin:4px;border-radius:22px;font-size:15px;font-weight:bold;cursor:pointer;font-family:inherit}
+button:hover{background:var(--pink2)}
+button:focus-visible{outline:3px solid #fff;outline-offset:2px}
+button.alt{background:#a7a1ed}
+button.sel{outline:3px solid var(--ink)}
+#message{min-height:26px;padding:2px 12px;font-weight:bold}
+.bar{display:flex;justify-content:center;flex-wrap:wrap}
+.ov{display:none;position:absolute;inset:0;z-index:10;background:var(--ov);align-items:center;justify-content:center;padding:14px;overflow:auto}
+.box{background:var(--paper);color:var(--paperink);width:min(520px,96%);padding:22px;border-radius:20px;box-shadow:0 0 35px #ffb9dc;line-height:1.6}
+.box h2{margin:0 0 8px;color:#e55e98}
+.box .opt{display:block;width:100%;text-align:left;margin:7px 0;background:#fff;color:#914d70;border:2px solid #f27caf;font-weight:600}
+.box .opt:hover{background:#ffd6e8}
+.box .opt.ok{background:#8fdc9d;border-color:#4da45e}
+.box .opt.no{background:#ff9aaa;border-color:#d64a62}
+#timer{font-size:22px;font-weight:bold}
+.tbar{height:9px;background:#ffd6e8;border-radius:6px;overflow:hidden;margin:2px 0 10px}
+.tbar i{display:block;height:100%;width:100%;background:#f27caf}
+.tbar.low i{background:#e0334f}
+.fail{font-size:19px;font-weight:bold;color:#c62a4a;margin:10px 0}
+</style>
+</head>
+<body>
+<h1>💗 HÀNH TRÌNH RƯỚC KIM PHƯỢNG 💗</h1>
+<div class="game" id="game">
+  <canvas id="cv" width="900" height="500"></canvas>
+  <div class="info"><span id="hp"></span><span id="score"></span><span id="lvl"></span></div>
+  <div id="message">Chạm/kéo trên màn hình hoặc dùng WASD để di chuyển.</div>
+  <div class="bar">
+    
+    <button id="fsBtn">⛶ Toàn màn hình</button>
+    <button id="menuBtn">☰ Menu</button>
+  </div>
+  <div class="ov" id="ov"><div class="box" id="box"></div></div>
+</div>
+
+<script>
+"use strict";
+const $=id=>document.getElementById(id);
+const cv=$("cv"),ctx=cv.getContext("2d"),W=900,H=500;
+const rand=(a,b)=>Math.random()*(b-a)+a;
+const dist=(a,b)=>Math.hypot(a.x-b.x,a.y-b.y);
+const shuffle=a=>{a=a.slice();for(let i=a.length-1;i>0;i--){const j=Math.floor(Math.random()*(i+1));[a[i],a[j]]=[a[j],a[i]]}return a};
+const clamp=(v,a,b)=>Math.max(a,Math.min(b,v));
+const L1=7,L2=14,L3=40; // số tim màn 1, màn 2, số từ màn 3
+
+/* ===== Trạng thái ===== */
+const G={g:"m",lv:1,hp:3,h:0,w:0,run:false,t:0,inv:0,cd:0,scene:0,wait:0};
+const P={x:75,y:250,r:17,sp:230},K={x:125,y:250},GATE={x:845,y:250,r:40};
+let keys={},hearts=[],parts=[],bosses=[],target=null,last=0,lastMsg="";
+const pools={};
+
+/* ===== Lưu / tải (có try/catch, chạy offline) ===== */
+function save(){try{localStorage.setItem("kp_save",JSON.stringify({lv:G.lv,g:G.g}))}catch(e){}}
+function load(){try{return JSON.parse(localStorage.getItem("kp_save"))}catch(e){return null}}
+const names=()=>G.g==="m"?["Hùng Duy","Kim Phượng"]:["Kim Phượng","Hùng Duy"];
+const meE=()=>G.g, ptE=()=>G.g==="m"?"f":"m";
+const say=t=>{$("message").textContent=t};
+
+/* ===== Câu hỏi ===== */
+// [câu hỏi, [các đáp án], index đúng]
+const Q1=[
+["Gặp ba mẹ người yêu lần đầu, bạn nên?",["Chào hỏi lễ phép, mỉm cười, trả lời gọn gàng khi được hỏi","Nói thật nhiều để gây ấn tượng","Khoe thành tích và tài sản của mình","Cười cho qua, ai hỏi gì cũng 'dạ'"],0],
+["Ngày kỷ niệm của hai người, nên làm gì?",["Tặng quà nhỏ hợp sở thích kèm lời chúc chân thành","Tặng món đắt nhất để chứng tỏ","Chúc qua tin nhắn cho nhanh","Chờ người ấy nhắc rồi mới làm"],0],
+["Người yêu đang buồn, bạn nên?",["Lắng nghe, ở bên cạnh, chưa vội đưa lời khuyên","Phân tích ngay nguyên nhân để giải quyết","Kể chuyện cười liên tục cho quên","Để người ấy ở một mình cho yên tĩnh"],0],
+["Hẹn 7h tối nhưng bạn bị kẹt xe, bạn nên?",["Báo sớm, xin lỗi và cho biết giờ dự kiến đến","Cứ chạy tới, đến rồi giải thích","Nhắn 'sắp tới' dù còn xa","Đổi hẹn sang hôm khác"],0],
+["Người yêu nấu món hơi mặn cho bạn, bạn nên?",["Cảm ơn, khen công sức, góp ý nhẹ nhàng nếu cần","Im lặng ăn hết rồi thôi","Nói thẳng 'mặn quá, ăn không nổi'","Chê vui cho không khí thoải mái"],0],
+["Muốn rước người yêu đi chơi cuối tuần, bạn nên?",["Xin phép ba mẹ trước và hẹn giờ đưa về","Nhắn báo ba mẹ sau khi đã đi","Nhờ bạn thân nói giúp với ba mẹ","Rủ đi luôn, mai tính"],0],
+["Hai người cãi nhau, cách tốt nhất là?",["Bình tĩnh nghỉ một chút rồi nói chuyện, xin lỗi nếu mình sai","Chứng minh mình đúng bằng mọi giá","Nhắn một đoạn dài giải thích rồi tắt máy","Chiến tranh lạnh chờ người ấy xuống nước"],0],
+["Món quà ý nghĩa nhất là gì?",["Món hợp sở thích, cho thấy mình để ý người ấy","Món đắt nhất tiệm","Món đang hot nhất trên mạng","Món giảm giá nhiều nhất"],0],
+["Người yêu kể hôm nay bị sếp la, bạn nên?",["Hỏi chuyện gì đã xảy ra và lắng nghe trước","Bảo 'chắc sếp nói đúng đó'","Khuyên nghỉ việc ngay","Bảo 'ai đi làm cũng bị vậy mà'"],0],
+["Người yêu quên sinh nhật bạn, bạn nên?",["Nói chuyện thẳng thắn, nhẹ nhàng, không trách móc","Im lặng giận vài ngày","Quên lại sinh nhật người ấy cho huề","Đăng status bóng gió"],0]];
+const Q2=[
+["Ba Vợ hỏi: 'Cháu định chăm sóc con gái bác thế nào?'",["Dạ cháu sẽ yêu thương, tôn trọng và cùng em cố gắng lâu dài ạ","Dạ cháu sẽ cho em mọi thứ em muốn ạ","Dạ cháu chưa nghĩ xa, cứ vui là được ạ","Dạ cháu hứa không bao giờ để em buồn ạ"],0],
+["Mẹ Vợ hỏi: 'Cháu đưa con tui đi đâu, mấy giờ về?'",["Dạ cháu xin báo trước địa điểm và đưa em về đúng giờ ạ","Dạ cháu đưa em đi chỗ vui rồi về, giờ thì chưa chắc ạ","Dạ cháu sẽ nhắn em báo lại ba mẹ ạ","Dạ có gì cháu gọi bác sau ạ"],0],
+["Ba Vợ hỏi: 'Cháu làm nghề gì, tương lai ra sao?'",["Dạ cháu có công việc, kế hoạch rõ ràng và đang cố gắng từng bước ạ","Dạ cháu đang tìm cơ hội lớn hơn ạ","Dạ cháu tin tương lai sẽ ổn ạ","Dạ cháu chưa rõ nhưng cháu chăm chỉ lắm ạ"],0],
+["Mẹ Vợ hỏi: 'Sao cháu thích con gái bác?'",["Vì em tốt bụng, chân thành và làm cháu muốn trưởng thành hơn ạ","Vì em xinh và dễ thương ạ","Vì em nấu ăn ngon ạ","Vì em hợp tính cháu ạ"],0],
+["Ba Vợ hỏi: 'Hai đứa cãi nhau thì cháu làm gì?'",["Dạ cháu bình tĩnh, lắng nghe, nhận lỗi nếu sai và nói chuyện tử tế ạ","Dạ cháu nhường em hết cho êm chuyện ạ","Dạ cháu để em nguôi giận rồi tính ạ","Dạ cháu giải thích cho em hiểu cháu đúng ạ"],0],
+["Mẹ Vợ hỏi: 'Nếu con gái bác bị bệnh giữa đêm thì sao?'",["Dạ cháu đưa em đi khám ngay và báo ba mẹ liền ạ","Dạ cháu mua thuốc rồi chăm em ở nhà ạ","Dạ cháu gọi hỏi bạn bè xem sao ạ","Dạ cháu bảo em nghỉ ngơi, sáng tính ạ"],0],
+["Ba Vợ hỏi: 'Nhà cháu và nhà bác có ý kiến khác nhau thì sao?'",["Dạ cháu lắng nghe cả hai bên và tìm cách hài hòa ạ","Dạ cháu nghe theo nhà cháu ạ","Dạ cháu ủng hộ em hết mình ạ","Dạ cháu tự quyết cùng em ạ"],0]];
+// Màn 3: [mood, lời Kim Phượng, đáp án, đúng]  mood: 0 vui, 1 buồn, 2 rất buồn
+// (Không còn gợi ý trong câu hỏi: phải nhớ sở thích của Phượng!)
+const Q3=[
+[0,"Phượng: 'Đói quá! Mình ăn gì giờ?'",["Bún thái chua cay","Phở bò","Cơm tấm sườn","Mì Ý sốt kem"],0],
+[0,"Phượng: 'Hôm nay trời đẹp ghê, mình ghé đâu nè?'",["Vườn hoa","Công viên nước","Trung tâm thương mại","Rạp chiếu phim"],0],
+[0,"Phượng: 'Uống gì mát mát đây?'",["Trà đào cam sả","Trà sữa trân châu","Nước mía","Cà phê sữa đá"],0],
+[0,"Phượng: 'Chụp hình kỷ niệm nha!'",["Dạ chụp liền, em đẹp nhất!","Thôi mệt quá","Chụp lén rồi xóa","Chụp qua loa rồi lướt điện thoại"],0],
+[1,"Phượng: 'Hôm nay em hơi buồn vì bị sếp la…'",["Lắng nghe rồi mua món em thích","'Ai biểu làm sai'","Đổi chủ đề sang game","Khuyên em nghỉ việc luôn"],0],
+[1,"Phượng: 'Anh/em có thấy em ít cười không?'",["Có, nên hôm nay mình đi chơi cho vui nhé","Không thấy đâu","Tại em khó tính","Chắc do thời tiết thôi"],0],
+[1,"Phượng: 'Em hơi lo vì ba mẹ chưa hài lòng…'",["Mình cùng cố gắng, em đừng lo","Chắc không hợp thôi","Kệ đi","Em đừng lo, ba mẹ sẽ tự hiểu thôi"],0],
+[1,"Phượng: 'Em không muốn ăn gì cả…'",["Mua chè để em vui lên","Ăn một mình","Bắt em ăn cơm","Rủ em đi ăn lẩu cay"],0],
+[2,"Phượng khóc: 'Em làm rơi mất kỷ vật rồi…'",["Ôm em, cùng đi tìm và an ủi","'Có gì mà khóc'","Bỏ đi chỗ khác","Mua cái mới cho em liền"],0],
+[2,"Phượng khóc: 'Em nhớ nhà quá…'",["Chở em về thăm ba mẹ, ở bên em","Bảo em đừng nhớ nữa","Im lặng lái xe","Mua đồ ăn vặt cho em quên"],0],
+[2,"Phượng nghẹn: 'Hôm nay là ngày tệ nhất của em…'",["Nắm tay em: 'Có anh/em ở đây rồi'","Kể chuyện cười liên tục","Nói 'ngày mai cũng vậy thôi'","Hỏi 'rồi sao nữa?'"],0],
+[2,"Phượng khóc nấc: 'Em sợ mất anh/em…'",["Hứa luôn ở bên và giữ lời","Nói 'đừng nghĩ nhiều'","Đổi chủ đề","Nói 'em lo xa quá'"],0]];
+const WORDS=[2,3,5]; // số "từ KP" nhận được theo vui / buồn / rất buồn
+const MOODS=["😄 Vui","😢 Buồn","😭 Rất buồn"],FACE=["😄","😢","😭"];
+
+function nextQ(key,src){ if(!pools[key]||!pools[key].length)pools[key]=shuffle(src); return pools[key].pop(); }
+
+/* ===== Overlay ===== */
+function openOv(html){clearInterval(window.__iv);$("box").innerHTML=html;$("ov").style.display="flex";G.run=false}
+function closeOv(){$("ov").style.display="none";G.run=true}
+function info(title,text,btn,cb){
+  openOv(`<h2>${title}</h2><p>${text}</p><button id="okb">${btn}</button>`);
+  $("okb").onclick=()=>{closeOv();cb&&cb()};
+}
+function ask(title,q,cb,sec=12){ // q = [câu hỏi, đáp án, idx]; hết giờ = trả lời sai
+  const order=shuffle(q[1].map((t,i)=>({t,i})));
+  openOv(`<h2>${title}</h2><div class="tbar" id="tbar"><i id="tb"></i></div><p><b>${q[0]}</b></p>`+order.map((o,k)=>`<button class="opt" data-k="${k}">${o.t}</button>`).join(""));
+  let done=false,t=sec;
+  const showCorrect=()=>document.querySelectorAll(".opt").forEach((x,k)=>{if(order[k].i===q[2])x.classList.add("ok")});
+  const iv=setInterval(()=>{
+    t-=.1;$("tb").style.width=Math.max(0,t/sec*100)+"%";
+    if(t<=sec*.3)$("tbar").classList.add("low");
+    if(t<=0&&!done){done=true;clearInterval(iv);showCorrect();setTimeout(()=>{closeOv();cb(false,true)},900)}
+  },100);
+  window.__iv=iv;
+  document.querySelectorAll(".opt").forEach(b=>b.onclick=()=>{
+    if(done)return;done=true;clearInterval(iv);
+    const ok=order[+b.dataset.k].i===q[2];
+    b.classList.add(ok?"ok":"no");
+    showCorrect();
+    setTimeout(()=>{closeOv();cb(ok,false)},900);
+  });
+}
+
+/* ===== Menu chính ===== */
+function menu(){
+  const s=load();
+  openOv(`<h2>💗 Chọn nhân vật</h2>
+  <div><button id="gm" class="alt ${G.g==="m"?"sel":""}">🧑 Nam (Hùng Duy)</button><button id="gf" class="alt ${G.g==="f"?"sel":""}">👩 Nữ (Kim Phượng)</button></div>
+  <div style="margin-top:10px">
+  ${s?`<button id="cont">▶ Chơi tiếp (Màn ${s.lv})</button>`:""}
+  <button id="newg">🔄 Chơi lại từ đầu</button></div>
+  <p style="font-size:13px">Hoạt động offline: lưu file này lại là chơi được không cần mạng.</p>`);
+  $("gm").onclick=()=>{G.g="m";menu()};
+  $("gf").onclick=()=>{G.g="f";menu()};
+  if(s)$("cont").onclick=()=>{G.g=s.g||G.g;closeOv();startLevel(s.lv)};
+  $("newg").onclick=()=>{closeOv();startLevel(1)};
+}
+
+/* ===== Màn chơi ===== */
+function startLevel(n){
+  G.lv=n;G.hp=3;G.h=0;G.w=0;G.inv=0;G.cd=0;G.scene=0;G.wait=2;parts=[];
+  P.x=75;P.y=250;K.x=125;K.y=250;
+  save();
+  if(n===1){
+    hearts=[];for(let i=0;i<L1;i++)hearts.push({x:rand(260,810),y:rand(90,440),ph:rand(0,6)});
+    bosses=[mkBoss("BA VỢ","",0,0,85,0,0,"#ffb347"),mkBoss("MẸ VỢ","",0,0,70,0,0,"#b99cff")];
+    bosses.forEach((b,i)=>{b.guard=true;b.alert=0;b.wp=0;b.range=125;b.alertT=.6;b.pts=hearts.filter((_,k)=>k%2===i).map(h=>({x:h.x+rand(-40,40),y:h.y+rand(-40,40)}));if(!b.pts.length)b.pts=[{x:500,y:250}];b.x=b.pts[0].x;b.y=b.pts[0].y});
+    info("🏠 Màn 1: Nhà "+names()[0],`Lén lụm đủ <b>${L1} trái tim</b> để rước ${names()[1]}. <b>Ba mẹ đang canh tim</b>: đừng để bị họ thấy quá lâu trong vòng vàng quanh họ, nếu không sẽ bị lôi về chỗ cũ và mất 1 máu! Mỗi tim là một câu hỏi <b>có giới hạn thời gian</b>: trả lời sai hoặc hết giờ thì không được tim và mất 1 máu!`,"Bắt đầu ▶",()=>say("Lụm các trái tim 💗"));
+  }else if(n===2){
+    hearts=[];for(let i=0;i<9;i++)spawnHeart();
+    bosses=[mkBoss("BA VỢ","👨‍🦳",420,120,120,105,.65,"#ffb347"),mkBoss("MẸ VỢ","👩‍🦳",620,380,95,135,.9,"#b99cff")];
+    info("🛵 Màn 2: Chở "+names()[1]+" đi chơi",`Ba mẹ rượt nhanh hơn và ra chiêu dồn dập! Lụm <b>${L2} trái tim</b> (tim sẽ <b>biến mất sau vài giây</b>), né vòng đỏ, rồi đến cổng và <b>trả lời đúng 2 câu hỏi liên tiếp</b> của ba mẹ.`,"Chạy thôi ▶");
+  }else{
+    hearts=[];for(let i=0;i<5;i++)spawnHeart();bosses=[];G.amb=rand(8,12);info("🛵 Màn 3: Chiều "+names()[1],`Chở ${names()[1]} đi chơi bằng xe máy và lụm tim để thu thập <b>${L3} từ</b> (mỗi tim +1 từ; tim <b>biến mất sau vài giây</b>). <b>Cứ mỗi 4 tim</b> sẽ có một phân cảnh 😄 Vui / 😢 Buồn / 😭 Rất buồn, <b>có giới hạn thời gian</b>: chọn đúng để được thêm từ (+1/+2/+3), chọn sai hoặc hết giờ thì mất 1 máu <b>và trừ 3 từ</b>. Ba mẹ rank bất ngờ rất thường xuyên!<br><br>📝 <b>Nhớ kỹ sở thích của Kim Phượng</b> (sẽ không nhắc lại): mê đồ <b>chua cay</b>, thích ngắm <b>hoa</b>, nghiện <b>trà đào</b>, và luôn vui khi có <b>chè</b>.`,"Lên xe ▶");
+  }
+  updateUI();
+}
+function mkBoss(name,emoji,x,y,sp,rad,warn,col){return{name,emoji,x,y,sp,radius:rad,warn,col,timer:rand(1.5,3),state:"idle",st:0,stun:0}}
+function spawnHeart(){const h={x:rand(70,810),y:rand(80,440),ph:rand(0,6)};if(G.lv>=2)h.ttl=rand(7,10);hearts.push(h)}
+function updateUI(){
+  $("hp").textContent="❤️ Máu: "+"❤️".repeat(G.hp)+"🖤".repeat(3-G.hp);
+  $("score").textContent=G.lv===1?`💗 Tim: ${G.h}/${L1}`:G.lv===2?`💗 Tim: ${G.h}/${L2}`:`💬 Từ: ${G.w}/${L3}`;
+  $("lvl").textContent="🎮 Màn "+G.lv;
+}
+function hurt(msg){
+  if(G.inv>0||!G.run)return;
+  G.hp--;G.inv=.8;burst(P.x,P.y,"#ff679d");say(msg);updateUI();
+  if(G.hp<=0){G.hp=0;updateUI();info("💔 Thất bại rồi!",`<div class="fail">“Mày lấy tư cách gì mà đòi quen con ${G.g==="m"?"gái":"trai"} tao?!” 💢</div>Thử lại màn này nhé!`,"Chơi lại màn "+G.lv,()=>startLevel(G.lv))}
+}
+function burst(x,y,c){for(let i=0;i<12;i++)parts.push({x,y,vx:rand(-100,100),vy:rand(-130,40),life:rand(.3,.8),c})}
+
+/* ===== Cập nhật ===== */
+function update(dt){
+  G.t+=dt;G.inv=Math.max(0,G.inv-dt);G.cd=Math.max(0,G.cd-dt);
+  parts.forEach(p=>{p.x+=p.vx*dt;p.y+=p.vy*dt;p.life-=dt});parts=parts.filter(p=>p.life>0);
+  if(!G.run)return;
+  moveWorld(dt);
+  bosses.forEach(b=>talk(b,dt));
+  if(G.lv===1){hearts1();bosses.forEach(b=>guardAI(b,dt))}
+  if(G.lv===2){hearts2(dt);bosses.forEach(b=>bossAI(b,dt));gate2()}
+  if(G.lv===3)scene3(dt);
+}
+function moveWorld(dt){
+  let dx=0,dy=0;
+  if(keys.ArrowLeft||keys.a||keys.A)dx--;if(keys.ArrowRight||keys.d||keys.D)dx++;
+  if(keys.ArrowUp||keys.w||keys.W)dy--;if(keys.ArrowDown||keys.s||keys.S)dy++;
+  if(!dx&&!dy&&target){ // điều khiển bằng chạm/con trỏ
+    const tx=target.x-P.x,ty=target.y-P.y,d=Math.hypot(tx,ty);
+    if(d>8){dx=tx/d;dy=ty/d}
+  }
+  const l=Math.hypot(dx,dy)||1;
+  P.x=clamp(P.x+dx/l*P.sp*dt*(dx||dy?1:0),P.r,W-P.r);
+  P.y=clamp(P.y+dy/l*P.sp*dt*(dx||dy?1:0),65,H-P.r);
+  if(G.lv>=2||G.h>=L1){const gx=P.x-K.x,gy=P.y-K.y,gd=Math.hypot(gx,gy);if(gd>42){K.x+=gx/gd*140*dt;K.y+=gy/gd*140*dt}}
+}
+function hearts1(){
+  for(const h of hearts){ if(dist(P,h)<28){
+    hearts.splice(hearts.indexOf(h),1);target=null;
+    ask("💗 Câu hỏi trái tim",nextQ("q1",Q1),(ok,to)=>{
+      if(ok){G.h++;burst(h.x,h.y,"#ff4f98");say("Đúng rồi! Được 1 tim 💗");updateUI();
+        if(G.h>=L1)info("🎉 Qua màn 1!","Đủ "+L1+" tim, "+names()[0]+" rước được "+names()[1]+" rồi! Lên xe đi chơi thôi.","Sang màn 2 ▶",()=>startLevel(2));}
+      else{spawnHeart();G.inv=0;hurt((to?"Hết giờ! ":"Sai rồi! ")+"Không được tim và mất 1 máu 💔")}
+    });break}}
+}
+function hearts2(dt){
+  for(const h of hearts)h.ttl-=dt;
+  hearts=hearts.filter(h=>h.ttl>0);
+  while(hearts.length<Math.min(9,L2-G.h))spawnHeart();
+  for(const h of hearts){if(dist(P,h)<28){hearts.splice(hearts.indexOf(h),1);G.h++;burst(h.x,h.y,"#ff4f98");say("Thu được tim! 💗");updateUI();break}}
+}
+function bossAI(b,dt){
+  b.stun=Math.max(0,b.stun-dt);
+  if(b.stun>0)return;
+  const dx=P.x-b.x,dy=P.y-b.y,d=Math.hypot(dx,dy)||1;
+  if(b.state==="warn"){
+    b.st-=dt;
+    if(b.st<=0){
+      if(dist(P,b)<b.radius+P.r){
+        hurt(b.name==="BA VỢ"?"Ba Vợ tung chưởng! ⚡":"Mẹ Vợ tạo sóng đẩy ra xa! 💨");
+        if(b.name==="MẸ VỢ"){P.x=clamp(P.x+dx/d*-75,P.r,W-P.r);P.y=clamp(P.y+dy/d*-75,65,H-P.r)}
+      }
+      burst(b.x,b.y,b.col);b.state="idle";b.timer=b.name==="BA VỢ"?1.9:2.8;
+    }
+  }else{
+    if(d>55){b.x+=dx/d*b.sp*dt;b.y+=dy/d*b.sp*dt}
+    b.timer-=dt;
+    if(b.timer<=0){b.state="warn";b.st=b.warn;say(b.name+" đang tích lực! Chạy ra khỏi vòng đỏ! ⚡")}
+  }
+  b.x=clamp(b.x,25,W-25);b.y=clamp(b.y,70,H-25);
+  if(dist(P,b)<P.r+24)hurt(b.name+" bắt gặp rồi! Chạy mau! 😂");
+}
+function gate2(){
+  if(dist(P,GATE)<GATE.r+P.r){
+    if(G.h<L2){say(`Cần đủ ${L2} tim mới qua cổng nha! 💗`);return}
+    target=null;
+    const fail=to=>{P.x=GATE.x-100;G.inv=0;hurt((to?"Hết giờ! ":"Sai rồi! ")+"Ba mẹ nhíu mày 😅")};
+    ask("👨‍👩‍👧 Ba mẹ "+names()[1]+" hỏi (1/2)",nextQ("q2",Q2),(ok,to)=>{
+      if(!ok)return fail(to);
+      ask("👨‍👩‍👧 Ba mẹ "+names()[1]+" hỏi (2/2)",nextQ("q2",Q2),(ok2,to2)=>{
+        if(ok2)info("🎉 Qua màn 2!","Ba mẹ gật đầu cho đi chơi! Giờ hãy chiều "+names()[1]+" nhé.","Sang màn 3 ▶",()=>startLevel(3));
+        else fail(to2);
+      },10);
+    },12);
+  }
+}
+function scene3(dt){
+  if(G.w>=L3){win();return}
+  for(const h of hearts)h.ttl-=dt;
+  hearts=hearts.filter(h=>h.ttl>0);
+  while(hearts.length<5)spawnHeart();
+  for(const h of hearts){if(dist(P,h)<28){
+    hearts.splice(hearts.indexOf(h),1);G.w=Math.min(L3,G.w+1);G.h++;burst(h.x,h.y,"#ff4f98");updateUI();
+    if(G.w>=L3){win();return}
+    if(G.h%4===0){target=null;mood3();return}
+    say("+1 từ 💬");break}}
+  G.amb-=dt;
+  if(bosses.length){
+    bosses.forEach(b=>bossAI(b,dt));
+    if(G.amb<=0){bosses=[];G.amb=rand(10,16);say("Ba mẹ đi rồi, thở phào! 😅")}
+  }else if(G.amb<=0){
+    const sx=P.x<450?820:80,r=Math.random(),list=[];
+    if(r<.8)list.push(mkBoss("BA VỢ","",sx,120,115,100,.7,"#ffb347"));
+    if(r>.2)list.push(mkBoss("MẸ VỢ","",sx,380,95,130,.95,"#b99cff"));
+    bosses=list;G.amb=rand(10,14);say("🚨 Ba mẹ rank bất ngờ! Chạy đi!");
+  }
+}
+function mood3(){
+  const q=nextQ("q3",Q3);G.mood=q[0];
+  ask(MOODS[q[0]]+" · Phân cảnh",[q[1],q[2],q[3]],(ok,to)=>{
+    if(ok){const b=q[0]+1;G.w=Math.min(L3,G.w+b);say(`Đúng ý ${names()[1]}! +${b} từ thưởng 💬`);burst(K.x,K.y,"#ff4f98")}
+    else{G.inv=0;G.w=Math.max(0,G.w-3);hurt((to?"Hết giờ! ":"")+names()[1]+" không vui... mất 1 máu và 3 từ 💔")}
+    updateUI();
+  },10);
+}
+function scene3Old(dt){
+  if(G.w>=30){win();return}
+  G.wait-=dt;
+  if(G.wait>0)return;
+  G.wait=2.2;
+  if(G.scene>0&&Math.random()<.35)return ambush();
+  const q=nextQ("q3",Q3);G.scene++;G.mood=q[0];
+  ask(MOODS[q[0]]+" · Phân cảnh",[q[1],q[2],q[3]],ok=>{
+    if(ok){G.w=Math.min(30,G.w+WORDS[q[0]]);say(`Đúng ý ${names()[1]}! +${WORDS[q[0]]} từ 💬`);burst(450,250,"#ff4f98")}
+    else{hurt(names()[1]+" không vui... mất 1 máu 💔");}
+    updateUI();
+  });
+}
+function ambush(){
+  G.run=false;let t=3.2;
+  const who=Math.random()<.5?"BA VỢ":"MẸ VỢ";
+  openOv(`<h2>🚨 ${who} rank bất ngờ!</h2><p>Bấm <b>CHẠY</b> trước khi hết giờ!</p><div id="timer">3.2</div><button id="runb" style="font-size:20px">🏃 CHẠY!</button>`);
+  const b=$("runb");b.style.position="relative";b.style.left=rand(-60,60)+"px";
+  let done=false;
+  const iv=setInterval(()=>{t-=.1;$("timer").textContent=Math.max(0,t).toFixed(1);
+    if(t<=0&&!done){done=true;clearInterval(iv);closeOv();G.inv=0;hurt(who+" bắt kịp rồi! 😂");G.wait=1.5}},100);
+  b.onclick=()=>{if(done)return;done=true;clearInterval(iv);closeOv();say("Thoát được rồi! 😅");G.wait=1.5};
+}
+function win(){
+  G.run=false;try{localStorage.removeItem("kp_save")}catch(e){}
+  info("💖 "+names()[0]+" đã rước được "+names()[1]+" đi chơi!","Đã thu thập đủ "+L3+" từ của "+names()[1]+"! "+names()[0]+" đã vượt qua mọi thử thách của Ba Vợ và Mẹ Vợ. Mong hai bạn luôn vui vẻ, quan tâm và trân trọng nhau. 💗","Về menu",menu);
+}
+/* ===== Vẽ ===== */
+function T(s,x,y,size=16,c="#813c69"){ctx.font=`bold ${size}px Arial`;ctx.textAlign="center";ctx.textBaseline="middle";ctx.fillStyle=c;ctx.fillText(s,x,y)}
+function bg(){
+  const sky=ctx.createLinearGradient(0,0,0,H);sky.addColorStop(0,"#c8efff");sky.addColorStop(1,"#f9f0ff");
+  ctx.fillStyle=sky;ctx.fillRect(0,0,W,H);
+  ctx.fillStyle=G.lv===1?"#f3d9c7":"#b8e9ac";ctx.fillRect(0,55,W,H-55);
+  if(G.lv===1){ // trong nhà
+    ctx.fillStyle="#fff1e4";ctx.fillRect(0,55,W,H-55);
+    ctx.fillStyle="#e8c9b0";for(let x=0;x<W;x+=60)ctx.fillRect(x,55,2,H);
+    T("🏠 NHÀ HÙNG DUY",W/2,28,18,"#8a5a3c");
+  }else if(G.lv>=2){
+    ctx.fillStyle="#f8dfd3";ctx.beginPath();ctx.ellipse(450,275,330,135,0,0,7);ctx.fill();
+    for(const x of [35,150,750,865]){ctx.fillStyle="#9b674f";ctx.fillRect(x-5,150,10,48);ctx.fillStyle="#65b879";ctx.beginPath();ctx.arc(x,145,27,0,7);ctx.fill()}
+    T(G.lv===2?"🌷 ĐƯỜNG ĐI CHƠI 🌷":"🌆 CHIỀU "+names()[1].toUpperCase()+" 🌆",W/2,28,18,"#59875f");
+  }else{
+    ctx.fillStyle="#6b6b7a";ctx.fillRect(0,300,W,110);
+    ctx.fillStyle="#fff";for(let x=-((G.t*220)%120);x<W;x+=120)ctx.fillRect(x,352,60,6);
+    T("🌆 CHIỀU "+names()[1].toUpperCase()+" 🌆",W/2,28,18,"#59875f");
+  }
+}
+function draw(){
+  bg();
+  {
+    if(G.lv===2){
+      const open=G.h>=L2;ctx.fillStyle=open?"#ff91bd":"#b8a6bf";ctx.fillRect(817,190,9,120);ctx.fillRect(865,190,9,120);
+      T(open?"💖 CỔNG":"🔒 CỔNG",845,170,12,"#85486b");
+    }
+    hearts.forEach(h=>{if(h.ttl!==undefined&&h.ttl<2.5&&Math.floor(G.t*8)%2)return;T("💗",h.x,h.y+Math.sin(G.t*3+h.ph)*5,25)});
+    bosses.forEach(drawBoss);
+    if(G.lv>=2||G.h>=L1)ch(K.x,K.y,ptE(),names()[1],"#f8a6cc");
+    else ch(125,250,ptE(),names()[1],"#f8a6cc");
+    if(!(G.inv>0&&Math.floor(G.t*14)%2===0))ch(P.x,P.y,meE(),names()[0],0,G.lv>=2);
+  }
+  if(G.lv===3){
+    T(FACE[G.mood||0],K.x,K.y-56,22);
+    ctx.fillStyle="#fff";ctx.fillRect(250,42,400,10);ctx.fillStyle="#f27caf";ctx.fillRect(250,42,400*G.w/L3,10);
+    T(`💬 ${G.w}/${L3}`,700,47,13);
+  }
+  parts.forEach(p=>{ctx.globalAlpha=Math.max(0,p.life);ctx.fillStyle=p.c;ctx.beginPath();ctx.arc(p.x,p.y,4,0,7);ctx.fill()});
+  ctx.globalAlpha=1;
+}
+function ch(x,y,sex,l,c,scoot){
+  person(x,y,sex,sex==="f"?"#5a3322":"#3b2b3a",sex==="f"?"#f8a6cc":"#a7a1ed",l,false,scoot);
+}
+// Vẽ người cùng kiểu với Ba Vợ / Mẹ Vợ: thân bo tròn, đầu, tóc, lông mày, mắt
+function person(x,y,sex,hair,body,label,angry,scoot){
+  ctx.fillStyle="#00000019";ctx.beginPath();ctx.ellipse(x,y+21,26,8,0,0,7);ctx.fill();
+  if(sex==="f"){ctx.fillStyle=hair;ctx.beginPath();ctx.roundRect(x-23,y-32,46,50,14);ctx.fill()}
+  ctx.fillStyle=body;ctx.beginPath();ctx.roundRect(x-24,y-8,48,31,12);ctx.fill();
+  ctx.fillStyle="#ffdec6";ctx.beginPath();ctx.arc(x,y-20,21,0,7);ctx.fill();
+  ctx.fillStyle=hair;ctx.beginPath();ctx.arc(x,y-26,22,Math.PI,Math.PI*2);ctx.fill();
+  ctx.strokeStyle="#704a61";ctx.lineWidth=3;ctx.beginPath();
+  if(angry){ctx.moveTo(x-13,y-27);ctx.lineTo(x-4,y-23);ctx.moveTo(x+13,y-27);ctx.lineTo(x+4,y-23)}
+  else{ctx.moveTo(x-12,y-25);ctx.lineTo(x-4,y-25);ctx.moveTo(x+12,y-25);ctx.lineTo(x+4,y-25)}
+  ctx.stroke();
+  ctx.fillStyle="#59364f";ctx.beginPath();ctx.arc(x-7,y-19,2.5,0,7);ctx.arc(x+7,y-19,2.5,0,7);ctx.fill();
+  if(!angry){ctx.lineWidth=2;ctx.beginPath();ctx.arc(x,y-14,6,.2,Math.PI-.2);ctx.stroke()}
+  if(sex==="f"&&!angry)T("🎀",x+15,y-38,14);
+  if(scoot)T("🛵",x,y+26,26);
+  T(label,x,y+(scoot?44:38),12,"#75456d");
+}
+/* ===== Lời ba mẹ Việt hay nói khi con có bồ ===== */
+function quotes(ba){
+  const who=G.g==="m"?"thằng đó":"con nhỏ đó",kid=G.g==="m"?"con gái":"con trai";
+  return ba?{
+    idle:["Học hành chưa xong mà yêu đương!","Dẫn "+who+" về đây cho tao coi!","Mấy giờ rồi còn chưa về?!","Yêu đương gì giờ này!","Nhà "+who+" làm nghề gì?","Có công ăn việc làm chưa mà đòi yêu?","Ba nói rồi, lo học đi!","Tao hỏi mà không ai trả lời hả?","Lại đi chơi nữa hả?","Đi với ai? Đi đâu? Mấy giờ về?"],
+    alert:["Ê! Làm gì đó?!","Đứng lại coi!","Tao thấy rồi nha!"],
+    warn:["Đứng lại cho tao!","Chưởng này của ba nè!","Hôm nay tao dạy cho một trận!"]
+  }:{
+    idle:["Con ơi, mới quen mà đã đi chơi hả?","Nó có tốt với con không?","Ăn cơm chưa con? Về ăn cơm!","Mẹ nói cho nghe nha!","Ai biểu quen người ta!","Lo học đi con, yêu đương làm chi!","Nhà "+who+" ở đâu? Ba mẹ làm gì?","Cấm đi chơi tối nha!","Đi đâu mà không xin phép mẹ?","Mẹ gọi sao không bắt máy?!","Mẹ chỉ có một đứa "+kid+" thôi đó!"],
+    alert:["Con kia! Làm gì đó?!","Mẹ thấy rồi nha!","Về nhà ngay!"],
+    warn:["Mẹ nói con nghe không hả?!","Về ngay cho mẹ!","Hết cho đi chơi!"]
+  };
+}
+function talk(b,dt){
+  b.sayT=(b.sayT===undefined?0:b.sayT)-dt;
+  const mode=b.state==="warn"?"warn":(b.alert>0?"alert":"idle");
+  if(mode!==b.mode){b.mode=mode;b.sayT=0}
+  if(b.sayT<=0){
+    const pool=quotes(b.name==="BA VỢ")[mode];let q;
+    do{q=pool[Math.floor(Math.random()*pool.length)]}while(q===b.q&&pool.length>1);
+    b.q=q;b.sayT=mode==="idle"?rand(2.8,4.2):1.6;
+  }
+}
+function bubble(b){
+  if(!b.q)return;
+  ctx.font="bold 13px Arial";
+  const w=ctx.measureText(b.q).width+22,h=28;
+  const x=clamp(b.x,w/2+4,W-w/2-4),y=Math.max(b.y-(b.guard?86:68),64);
+  ctx.fillStyle="#fffffff2";ctx.strokeStyle="#c75b8f";ctx.lineWidth=2;
+  ctx.beginPath();ctx.roundRect(x-w/2,y-h/2,w,h,10);ctx.fill();ctx.stroke();
+  const tx=clamp(b.x,x-w/2+14,x+w/2-14);
+  ctx.beginPath();ctx.moveTo(tx-6,y+h/2-1);ctx.lineTo(tx,y+h/2+8);ctx.lineTo(tx+6,y+h/2-1);ctx.closePath();
+  ctx.fillStyle="#fffffff2";ctx.fill();
+  ctx.strokeStyle="#c75b8f";ctx.beginPath();ctx.moveTo(tx-6,y+h/2);ctx.lineTo(tx,y+h/2+8);ctx.lineTo(tx+6,y+h/2);ctx.stroke();
+  T(b.q,x,y+1,13,"#7a2f58");
+}
+function guardAI(b,dt){
+  const t=b.pts[b.wp],dx=t.x-b.x,dy=t.y-b.y,d=Math.hypot(dx,dy);
+  if(d<6)b.wp=(b.wp+1)%b.pts.length;else{b.x+=dx/d*b.sp*dt;b.y+=dy/d*b.sp*dt}
+  if(dist(P,b)<b.range){
+    b.alert+=dt;
+    if(b.alert>b.alertT){b.alert=0;P.x=75;P.y=250;target=null;G.inv=0;hurt(b.name+" thấy rồi! Bị lôi về chỗ cũ 😂")}
+  }else b.alert=Math.max(0,b.alert-dt);
+}
+function drawBoss(b){
+  if(b.guard){ctx.beginPath();ctx.arc(b.x,b.y,b.range,0,7);ctx.fillStyle=b.alert>0?"#ff3f6540":"#ffe14d26";ctx.fill();if(b.alert>0)T("❗",b.x,b.y-62,22)}
+  if(b.state==="warn"){ctx.beginPath();ctx.arc(b.x,b.y,b.radius,0,7);ctx.fillStyle="#ff3f652b";ctx.fill();ctx.strokeStyle="#ff416f";ctx.lineWidth=4;ctx.setLineDash([8,6]);ctx.stroke();ctx.setLineDash([])}
+  const ba=b.name==="BA VỢ";
+  person(b.x,b.y,ba?"m":"f","#ded4c9",ba?"#9f9be1":"#f0a3c8",b.name,true);
+  bubble(b);
+}
+function loop(ts){
+  const dt=Math.min((ts-last)/1000||0,.035);last=ts;
+  update(dt);draw();requestAnimationFrame(loop);
+}
+
+/* ===== Điều khiển: bàn phím + chạm/con trỏ ===== */
+document.addEventListener("keydown",e=>{
+  if(["ArrowUp","ArrowDown","ArrowLeft","ArrowRight"," "].includes(e.key))e.preventDefault();
+  keys[e.key]=true;
+});
+document.addEventListener("keyup",e=>{keys[e.key]=false});
+function pos(e){const r=cv.getBoundingClientRect();return{x:(e.clientX-r.left)*W/r.width,y:(e.clientY-r.top)*H/r.height}}
+cv.addEventListener("pointerdown",e=>{e.preventDefault();cv.setPointerCapture(e.pointerId);target=pos(e)});
+cv.addEventListener("pointermove",e=>{if(target)target=pos(e)});
+["pointerup","pointercancel"].forEach(n=>cv.addEventListener(n,()=>{target=null}));
+$("menuBtn").onclick=()=>{save();menu()};
+
+/* ===== Toàn màn hình (điện thoại + máy tính; iPhone dùng chế độ giả lập) ===== */
+function toggleFS(){
+  const g=$("game"),d=document,el=d.documentElement;
+  const inFS=d.fullscreenElement||d.webkitFullscreenElement;
+  try{
+    if(inFS){(d.exitFullscreen||d.webkitExitFullscreen).call(d);g.classList.remove("fs");return}
+    const req=g.requestFullscreen||g.webkitRequestFullscreen;
+    if(req){Promise.resolve(req.call(g)).then(()=>g.classList.add("fs")).catch(()=>g.classList.toggle("fs"));return}
+  }catch(e){}
+  g.classList.toggle("fs");
+}
+$("fsBtn").onclick=toggleFS;
+["fullscreenchange","webkitfullscreenchange"].forEach(n=>document.addEventListener(n,()=>{
+  if(!(document.fullscreenElement||document.webkitFullscreenElement))$("game").classList.remove("fs")}));
+
+/* ===== Khởi động ===== */
+updateUI();menu();requestAnimationFrame(loop);
+</script>
+</body>
+</html>
